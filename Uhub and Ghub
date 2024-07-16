@@ -1,0 +1,39 @@
+CREATE TABLE my_dataset.restaurant_hours (
+    Grubhub_Slug STRING,
+    Virtual_Restaurant_Business_Hours STRING,
+    Uber_Eats_Slug STRING,
+    Uber_Eats_Business_Hours STRING,
+    is_out_range STRING
+);
+
+CREATE TEMP FUNCTION jsonObjectKeys(input STRING)
+RETURNS ARRAY<STRING>
+LANGUAGE js AS """
+  return Object.keys(JSON.parse(input));
+""";
+
+WITH grubhub_hours AS (
+  SELECT 
+    JSON_EXTRACT_SCALAR(CAST(vb_name AS STRING), '$.slug') AS gh_slug,
+    JSON_EXTRACT_SCALAR(CAST(vb_name AS STRING), '$.availability_by_catalog.STANDARD_DELIVERY.schedule_rules[0].from') AS gh_open_time,
+    JSON_EXTRACT_SCALAR(CAST(vb_name AS STRING), '$.availability_by_catalog.STANDARD_DELIVERY.schedule_rules[0].to') AS gh_close_time
+  FROM `arboreal-vision-339901.take_home_v2.virtual_kitchen_grubhub_hours`
+  LIMIT 1000
+),
+ubereats_hours AS (
+  SELECT
+    JSON_EXTRACT_SCALAR(CAST(vb_name AS STRING), '$[0].key') AS ue_slug,
+    JSON_EXTRACT_SCALAR(CAST(vb_name AS STRING), '$[0].sections[0].regularHours[0]') AS ue_start_time,
+    JSON_EXTRACT_SCALAR(CAST(vb_name AS STRING), '$[0].sections[0].regularHours[1]') AS ue_end_time
+  FROM `arboreal-vision-339901.take_home_v2.virtual_kitchen_ubereats_hours`
+  LIMIT 1000
+)
+SELECT
+  gh.gh_slug,
+  gh.gh_open_time,
+  gh.gh_close_time,
+  ue.ue_start_time,
+  ue.ue_end_time
+FROM grubhub_hours gh
+JOIN ubereats_hours ue
+ON gh.gh_slug = ue.ue_slug;
